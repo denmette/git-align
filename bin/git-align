@@ -106,7 +106,7 @@ while [[ $# -gt 0 ]]; do
       show_help
       exit 0
       ;;
-    --version)
+    -V|--version)
       echo "git-align $VERSION"
       exit 0
       ;;
