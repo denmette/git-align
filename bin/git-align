@@ -2,7 +2,7 @@
 
 set -u
 
-VERSION="0.1.0"
+VERSION="0.1.1"
 PARALLEL=""
 PARALLEL_COUNT=""
 SINCE=""
@@ -118,6 +118,13 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# 🙈 helpers
+has_fd=false
+has_fzf=false
+
+command -v fd >/dev/null 2>&1 && has_fd=true
+command -v fzf >/dev/null 2>&1 && has_fzf=true
+
 LOG_BASE="${GIT_ALIGN_LOG_DIR:-$HOME/.git-align/logs}"
 
 if [ "$PERSIST_LOGS" = true ]; then
@@ -210,11 +217,20 @@ run_repo > "$log_file" 2>&1
 
 # 🔍 Collect repos
 EXCLUDES="node_modules|vendor|target|dist|build|.terraform|.gradle|.venv|__pycache__|.next|out|coverage"
-repos=$(fd -H -t d ".git" -x dirname | sort -u | grep -vE "/($EXCLUDES)/")
+if [ "$has_fd" = true ]; then
+  repos=$(fd -H -t d ".git" -x dirname | sort -u | grep -vE "/($EXCLUDES)/")
+else
+  echo "⚠️ 'fd' not found, falling back to slower 'find'"
+  repos=$(find . -type d -name ".git" -exec dirname {} \; | sort -u | grep -vE "/($EXCLUDES)/")
+fi
 
 # 🎯 Interactive
 if [ "$INTERACTIVE" = true ]; then
-  repos=$(echo "$repos" | fzf -m --preview 'git -C {} status -sb')
+  if [ "$has_fzf" = true ]; then
+    repos=$(echo "$repos" | fzf -m --preview 'git -C {} status -sb')
+  else
+    echo "⚠️ 'fzf' not found, skipping interactive mode"
+  fi
 fi
 
 COUNT=$(echo "$repos" | grep -c .)
@@ -238,7 +254,13 @@ if [ "$VERBOSE" = true ]; then
   echo "-----------------------------------"
 fi
 
-while IFS= read -r log; do
+if [ "$has_fd" = true ]; then
+  LOG_CMD='fd -t f -e log . "$LOG_DIR" | sort'
+else
+  LOG_CMD='find "$LOG_DIR" -type f -name "*.log" | sort'
+fi
+
+eval "$LOG_CMD" | while IFS= read -r log; do
   repo=$(basename "$log" .log | sed "s|_|/|g")
 
   if [ "$VERBOSE" = true ]; then
@@ -254,7 +276,7 @@ while IFS= read -r log; do
       echo "❌ $repo"
     fi
   fi
-done < <(fd -t f -e log . "$LOG_DIR" | sort)
+done
 
 # 📊 Summary
 echo ""
@@ -270,10 +292,14 @@ echo "❌ Failed : $FAILED"
 if [ "$FAILED" -gt 0 ]; then
   echo ""
   echo "⚠️ Failed repositories:"
-  FAILED_LOGS=$(grep -L "✅ SUCCESS" "$LOG_DIR"/*.log 2>/dev/null)
-  echo "$FAILED_LOGS" | sed "s|.*/||"
+
+  for log in $(grep -L "✅ SUCCESS" "$LOG_DIR"/*.log 2>/dev/null); do
+    repo=$(basename "$log" .log | sed "s|_|/|g")
+    echo "❌ $repo"
+    echo "   → $log"
+  done
+
   echo ""
-  echo "👉 Check logs in $LOG_DIR"
 fi
 
 # 🧹 Cleanup logic
@@ -281,15 +307,16 @@ if [ "$PERSIST_LOGS" = false ]; then
   if [ "$FAILED" -eq 0 ]; then
     rm -rf "$LOG_DIR"
   else
+    # keep only failed logs
     for log in "$LOG_DIR"/*.log; do
       if grep -q "✅ SUCCESS" "$log"; then
         rm -f "$log"
       fi
     done
-    echo "📂 Logs (only failures) kept in: $LOG_DIR"
+    echo "📂 Logs: $LOG_DIR (failures only)"
   fi
 else
-  echo "📂 Logs saved in: $LOG_DIR"
+  echo "📂 Logs: $LOG_DIR"
 fi
 
 echo "-----------------------------------"
