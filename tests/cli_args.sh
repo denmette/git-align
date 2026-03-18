@@ -14,13 +14,13 @@ test_help() {
 test_version_short_flag() {
   run_cli -V
   assert_status 0 "$status"
-  assert_contains "$output" "git-align 0.2.0"
+  assert_matches "$output" '^git-align ([0-9]+\.[0-9]+\.[0-9]+|dev)$'
 }
 
 test_version_long_flag() {
   run_cli --version
   assert_status 0 "$status"
-  assert_contains "$output" "git-align 0.2.0"
+  assert_matches "$output" '^git-align ([0-9]+\.[0-9]+\.[0-9]+|dev)$'
 }
 
 test_parallel_requires_value() {

@@ -47,6 +47,15 @@ assert_file_contains() {
   fi
 }
 
+assert_matches() {
+  local value="$1"
+  local pattern="$2"
+
+  if [[ ! "$value" =~ $pattern ]]; then
+    fail "expected '$value' to match regex: $pattern"
+  fi
+}
+
 run_cli() {
   set +e
   output="$(bash "$CLI" "$@" 2>&1)"
