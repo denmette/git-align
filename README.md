@@ -18,8 +18,8 @@
 
 > Keep multiple Git repositories aligned with their default branch.
 
-`git-align` helps you update many local repositories in one go.  
-It fetches, rebases, and keeps your branches in sync with the default branch (`origin/HEAD`), while handling local changes safely.
+`git-align` helps you update many local repositories in one go.
+It fetches, rebases, and keeps your branches in sync with the remote default branch while handling local changes safely.
 
 ---
 
@@ -27,11 +27,13 @@ It fetches, rebases, and keeps your branches in sync with the default branch (`o
 
 - 🔄 Update multiple repositories at once
 - ⚡ Parallel execution support
+- 📊 Live progress output while repositories are processed
 - 🎯 Interactive selection with `fzf`
 - ⏱️ Filter repositories by recent remote changes (`--since`)
 - 🔀 Rebase current branch on default branch
 - 🧪 Preview changes with `--dry-run`
 - 🧹 Auto-stash and restore local changes
+- 🧭 Fallback detection when local `origin/HEAD` is missing
 - 📜 Optional detailed logs
 - 🧠 Smart log cleanup (only failures kept by default)
 
@@ -66,6 +68,8 @@ Make sure `~/.local/bin` is in your `$PATH`.
 ```bash
 git-align [options]
 ```
+
+Use `git-align --help` to print the current version and CLI help.
 
 ---
 
@@ -142,12 +146,20 @@ git-align --dry-run
 
 ---
 
+### Dry run with selection
+
+```bash
+git-align -i --dry-run
+```
+
+---
+
 ## 🧠 How it works
 
 For each repository:
 
 1. Fetches all remotes
-2. Detects default branch (`origin/HEAD`)
+2. Detects the default branch, recovering `origin/HEAD` when possible
 3. Checks if updates are needed
 4. Stashes local changes if necessary
 5. Updates default branch
@@ -181,7 +193,7 @@ bash tests/run.sh
 
 This covers CLI argument handling and syntax validation. Add new tests under `tests/` as standalone Bash scripts.
 
-The suite now includes an integration test that creates temporary Git repositories and verifies branch update/rebase behavior end to end.
+The suite includes command-level integration tests for rebase behavior, empty selections, invalid options, dry runs, missing `origin/HEAD`, and path handling with spaces.
 
 ---
 
@@ -195,7 +207,7 @@ To cut a release:
 GitHub -> Actions -> Release -> Run workflow
 ```
 
-Use the optional `dry_run` input to preview the next version and notes without creating a tag or release.
+Use the optional `dry_run` workflow input to preview the next version and notes without creating a tag or release.
 
 ---
 
@@ -215,9 +227,9 @@ brew install fd fzf
 
 ## ⚡ Performance
 
-* Uses `fd` for fast repository discovery
-* Supports parallel execution via `xargs -P`
-* Optimized for large monorepo-style directory structures
+* Uses `fd` for fast repository discovery when available
+* Falls back to `find` when `fd` is not installed
+* Supports parallel execution and live progress output
 
 ---
 
@@ -243,7 +255,6 @@ Feel free to fork, tweak, and improve.
 
 Ideas for future improvements:
 
-* progress indicator
 * colored output
 * JSON output mode
 
