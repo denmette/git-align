@@ -97,6 +97,34 @@ read_command_lines() {
   done < <("$@")
 }
 
+resolve_default_branch() {
+  local default_branch=""
+
+  default_branch=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@')
+
+  if [ -n "$default_branch" ] && git show-ref --verify --quiet "refs/remotes/origin/$default_branch"; then
+    printf '%s\n' "$default_branch"
+    return 0
+  fi
+
+  git remote set-head origin --auto >/dev/null 2>&1 || true
+  default_branch=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@')
+
+  if [ -n "$default_branch" ] && git show-ref --verify --quiet "refs/remotes/origin/$default_branch"; then
+    printf '%s\n' "$default_branch"
+    return 0
+  fi
+
+  for default_branch in main master; do
+    if git show-ref --verify --quiet "refs/remotes/origin/$default_branch"; then
+      printf '%s\n' "$default_branch"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
 die() {
   echo "❌ $1" >&2
   exit 1
@@ -261,9 +289,9 @@ process_repo() {
     fi
 
     current=$(git branch --show-current)
-    default_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed "s@^refs/remotes/origin/@@")
+    default_branch=$(resolve_default_branch)
 
-    if [ -z "$default_branch" ]; then
+    if [ -z "${default_branch:-}" ]; then
       echo "⚠️ No default branch"
       exit 1
     fi
@@ -478,7 +506,7 @@ run_repos() {
     return 0
   fi
 
-  export -f process_repo
+  export -f process_repo resolve_default_branch
   for repo_index in "${!REPO_LIST[@]}"; do
     printf '%s\0%s\0' "$repo_index" "${REPO_LIST[$repo_index]}"
   done | xargs -0 -n2 -P "$PARALLEL_COUNT" bash -c 'process_repo "$1" "$2" || true' _ &
