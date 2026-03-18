@@ -158,6 +158,20 @@ For each repository:
 
 ---
 
+## 🧪 Development
+
+Run the current shell test suite with:
+
+```bash
+bash tests/run.sh
+```
+
+This covers CLI argument handling and syntax validation. Add new tests under `tests/` as standalone Bash scripts.
+
+The suite now includes an integration test that creates temporary Git repositories and verifies branch update/rebase behavior end to end.
+
+---
+
 ## ⚠️ Requirements
 
 * `git`

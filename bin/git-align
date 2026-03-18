@@ -2,31 +2,39 @@
 
 set -u
 
-VERSION="0.1.1"
+VERSION="0.1.2"
+SCRIPT_PATH="${BASH_SOURCE[0]}"
+
 PARALLEL=""
 PARALLEL_COUNT=""
 SINCE=""
 INTERACTIVE=false
 VERBOSE=false
 PERSIST_LOGS=false
+LOG_BASE=""
+LOG_DIR=""
+REPOS=""
+HAS_FD=false
+HAS_FZF=false
+REPO_LIST=()
 
 show_help() {
   cat << EOF
 
-             __    __                      __  __                     
-            /  |  /  |                    /  |/  |                    
-    ______  $$/  _$$ |_           ______  $$ |$$/   ______   _______  
-   /      \ /  |/ $$   |  ______ /      \ $$ |/  | /      \ /       \ 
+             __    __                      __  __
+            /  |  /  |                    /  |/  |
+    ______  $$/  _$$ |_           ______  $$ |$$/   ______   _______
+   /      \ /  |/ $$   |  ______ /      \ $$ |/  | /      \ /       \
   /$$$$$$  |$$ |$$$$$$/  /      |$$$$$$  |$$ |$$ |/$$$$$$  |$$$$$$$  |
   $$ |  $$ |$$ |  $$ | __$$$$$$/ /    $$ |$$ |$$ |$$ |  $$ |$$ |  $$ |
   $$ \__$$ |$$ |  $$ |/  |      /$$$$$$$ |$$ |$$ |$$ \__$$ |$$ |  $$ |
   $$    $$ |$$ |  $$  $$/       $$    $$ |$$ |$$ |$$    $$ |$$ |  $$ |
-   $$$$$$$ |$$/    $$$$/         $$$$$$$/ $$/ $$/  $$$$$$$ |$$/   $$/ 
-  /  \__$$ |                                      /  \__$$ |          
-  $$    $$/                                       $$    $$/           
-   $$$$$$/                                         $$$$$$/            
+   $$$$$$$ |$$/    $$$$/         $$$$$$$/ $$/ $$/  $$$$$$$ |$$/   $$/
+  /  \__$$ |                                      /  \__$$ |
+  $$    $$/                                       $$    $$/
+   $$$$$$/                                         $$$$$$/
 
-🛠️  git-align - Keep multiple git repositories aligned
+git-align - Keep multiple git repositories aligned
 
 USAGE:
   git-align [options]
@@ -39,285 +47,350 @@ OPTIONS:
       --logs             Persist logs (otherwise only failures are kept)
   -V, --version          Show version
   -h, --help             Show this help message
-
-EXAMPLES:
-  git-align
-      Run sequentially on all repositories
-
-  git-align -p 4
-      Run updates in parallel (4 repos at a time)
-
-  git-align -s "2 days ago"
-      Only update repos with recent remote changes
-
-  git-align -i
-      Select repositories interactively
-
-  git-align -p 4 -s "1 week ago" -i
-      🔥 Fast + filtered + interactive
-
-  git-align -v --logs
-      Verbose output and keep logs for debugging
-
-NOTES:
-  - Uses default branch (origin/HEAD)
-  - Rebases your current branch on top of default branch
-  - Automatically stashes local changes
-  - Logs are temporary unless --logs is provided
-  - When not using --logs, only failed repo logs are kept
-
 EOF
 }
 
-# 🔍 Argument parsing
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --parallel=*)
-      PARALLEL_COUNT="${1#--parallel=}"
-      PARALLEL="-P$PARALLEL_COUNT"
-      shift
-      ;;
-    -p|--parallel)
-      PARALLEL_COUNT="$2"
-      PARALLEL="-P$PARALLEL_COUNT"
-      shift 2
-      ;;
-    --since=*)
-      SINCE="${1#--since=}"
-      shift
-      ;;
-    -s|--since)
-      SINCE="$2"
-      shift 2
-      ;;
-    -i|--interactive)
-      INTERACTIVE=true
-      shift
-      ;;
-    -v|--verbose)
-      VERBOSE=true
-      shift
-      ;;
-    --logs)
-      PERSIST_LOGS=true
-      shift
-      ;;
-    -h|--help)
-      show_help
-      exit 0
-      ;;
-    -V|--version)
-      echo "git-align $VERSION"
-      exit 0
-      ;;
+read_command_lines() {
+  local target_name="$1"
+  shift
+  local line
+
+  eval "$target_name=()"
+  while IFS= read -r line; do
+    eval "$target_name+=(\"\$line\")"
+  done < <("$@")
+}
+
+die() {
+  echo "❌ $1" >&2
+  exit 1
+}
+
+reset_state() {
+  PARALLEL=""
+  PARALLEL_COUNT=""
+  SINCE=""
+  INTERACTIVE=false
+  VERBOSE=false
+  PERSIST_LOGS=false
+  LOG_BASE="${GIT_ALIGN_LOG_DIR:-$HOME/.git-align/logs}"
+  LOG_DIR=""
+  REPOS=""
+  HAS_FD=false
+  HAS_FZF=false
+  REPO_LIST=()
+}
+
+require_arg() {
+  local option="$1"
+  local value="${2-}"
+
+  if [ -z "$value" ] || [[ "$value" == -* ]]; then
+    die "Option $option requires a value"
+  fi
+}
+
+parse_args() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --parallel=*)
+        PARALLEL_COUNT="${1#--parallel=}"
+        PARALLEL="-P$PARALLEL_COUNT"
+        shift
+        ;;
+      -p|--parallel)
+        require_arg "$1" "${2-}"
+        PARALLEL_COUNT="$2"
+        PARALLEL="-P$PARALLEL_COUNT"
+        shift 2
+        ;;
+      --since=*)
+        SINCE="${1#--since=}"
+        shift
+        ;;
+      -s|--since)
+        require_arg "$1" "${2-}"
+        SINCE="$2"
+        shift 2
+        ;;
+      -i|--interactive)
+        INTERACTIVE=true
+        shift
+        ;;
+      -v|--verbose)
+        VERBOSE=true
+        shift
+        ;;
+      --logs)
+        PERSIST_LOGS=true
+        shift
+        ;;
+      -h|--help)
+        show_help
+        exit 0
+        ;;
+      -V|--version)
+        echo "git-align $VERSION"
+        exit 0
+        ;;
       *)
-      echo "❌ Unknown option: $1"
-      echo "Use --help for usage"
+        echo "❌ Unknown option: $1"
+        echo "Use --help for usage"
+        exit 1
+        ;;
+    esac
+  done
+}
+
+detect_tools() {
+  command -v fd >/dev/null 2>&1 && HAS_FD=true
+  command -v fzf >/dev/null 2>&1 && HAS_FZF=true
+}
+
+init_log_dir() {
+  if [ "$PERSIST_LOGS" = true ]; then
+    local timestamp
+    timestamp=$(date +"%Y-%m-%d_%H-%M-%S")
+    LOG_DIR="$LOG_BASE/$timestamp"
+    mkdir -p "$LOG_DIR"
+  else
+    LOG_DIR=$(mktemp -d -t git-align-logs-XXXX)
+  fi
+
+  export LOG_DIR SINCE
+}
+
+print_run_header() {
+  echo "🔄 Updating repositories..."
+  [ -n "$PARALLEL_COUNT" ] && echo "⚡ Parallel: $PARALLEL_COUNT"
+  [ -n "$SINCE" ] && echo "⏱️ Since: $SINCE"
+  [ "$INTERACTIVE" = true ] && echo "🎯 Interactive mode"
+  echo "📂 Logs: $LOG_DIR"
+  echo ""
+}
+
+process_repo() {
+  local repo_path="$1"
+  local repo_name
+  local log_file
+
+  repo_name=$(echo "$repo_path" | sed "s|^\./||" | sed "s|/|_|g")
+  log_file="$LOG_DIR/${repo_name}.log"
+
+  (
+    set -e
+
+    cd "$repo_path" || exit 1
+
+    local current
+    local default_branch
+    local changes
+    local stashed=false
+    local has_untracked=false
+
+    echo "📦 $repo_path"
+
+    git fetch --all --prune
+
+    current=$(git branch --show-current)
+    default_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed "s@^refs/remotes/origin/@@")
+
+    if [ -z "$default_branch" ]; then
+      echo "⚠️ No default branch"
       exit 1
-      ;;
-  esac
-done
+    fi
 
-# 🙈 helpers
-has_fd=false
-has_fzf=false
+    echo "👉 Current: $current | Default: $default_branch"
 
-command -v fd >/dev/null 2>&1 && has_fd=true
-command -v fzf >/dev/null 2>&1 && has_fzf=true
-
-LOG_BASE="${GIT_ALIGN_LOG_DIR:-$HOME/.git-align/logs}"
-
-if [ "$PERSIST_LOGS" = true ]; then
-  TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
-  LOG_DIR="$LOG_BASE/$TIMESTAMP"
-  mkdir -p "$LOG_DIR"
-else
-  LOG_DIR=$(mktemp -d -t git-align-logs-XXXX)
-fi
-
-echo "🔄 Updating repositories..."
-[ -n "$PARALLEL_COUNT" ] && echo "⚡ Parallel: $PARALLEL_COUNT"
-[ -n "$SINCE" ] && echo "⏱️ Since: $SINCE"
-[ "$INTERACTIVE" = true ] && echo "🎯 Interactive mode"
-echo "📂 Logs: $LOG_DIR"
-echo ""
-
-export LOG_DIR
-
-# 🧠 Core logic
-CMD='
-repo=$(dirname "$1")
-
-repo_name=$(echo "$repo" | sed "s|^\./||" | sed "s|/|_|g")
-log_file="$LOG_DIR/${repo_name}.log"
-
-run_repo() {
-  set -e
-
-  cd "$repo" || exit 1
-
-  echo "📦 $repo"
-
-  git fetch --all --prune
-
-  CURRENT=$(git branch --show-current)
-  DEFAULT=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed "s@^refs/remotes/origin/@@")
-
-  if [ -z "$DEFAULT" ]; then
-    echo "⚠️ No default branch"
-    exit 1
-  fi
-
-  echo "👉 Current: $CURRENT | Default: $DEFAULT"
-
-  # 🔍 Check if repo is already up-to-date
-  if git diff --quiet HEAD origin/$DEFAULT; then
-    echo "⏭️ Already up-to-date"
-    echo "✅ SUCCESS"
-    exit 0
-  fi
-
-  # 🔍 Since filter
-  if [ -n "'"$SINCE"'" ]; then
-    CHANGES=$(git log HEAD..origin/$DEFAULT --since="'"$SINCE"'" --oneline)
-
-    if [ -z "$CHANGES" ]; then
-      echo "⏭️ No recent changes"
+    if git diff --quiet HEAD "origin/$default_branch"; then
+      echo "⏭️ Already up-to-date"
       echo "✅ SUCCESS"
       exit 0
     fi
-  fi
 
-  STASHED=false
-  if ! git diff --quiet || ! git diff --cached --quiet; then
-    echo "👉 Stashing changes"
-    git stash push -u -m auto-update
-    STASHED=true
-  fi
+    if [ -n "$SINCE" ]; then
+      changes=$(git log HEAD.."origin/$default_branch" --since="$SINCE" --oneline)
 
-  git switch "$DEFAULT"
-  git pull --rebase origin "$DEFAULT"
+      if [ -z "$changes" ]; then
+        echo "⏭️ No recent changes"
+        echo "✅ SUCCESS"
+        exit 0
+      fi
+    fi
 
-  if [ "$CURRENT" != "$DEFAULT" ]; then
-    git switch "$CURRENT"
-    git rebase "origin/$DEFAULT"
-  fi
+    if [ -n "$(git ls-files --others --exclude-standard)" ]; then
+      has_untracked=true
+    fi
 
-  if [ "$STASHED" = true ]; then
-    git stash pop || echo "⚠️ Stash conflict"
-  fi
+    if ! git diff --quiet || ! git diff --cached --quiet || [ "$has_untracked" = true ]; then
+      echo "👉 Stashing changes"
+      git stash push -u -m auto-update
+      stashed=true
+    fi
 
-  git status -sb
+    git switch "$default_branch"
+    git pull --rebase origin "$default_branch"
 
-  echo "✅ SUCCESS"
+    if [ "$current" != "$default_branch" ]; then
+      git switch "$current"
+      git rebase "origin/$default_branch"
+    fi
+
+    if [ "$stashed" = true ]; then
+      if ! git stash pop; then
+        echo "⚠️ Stash conflict"
+        exit 1
+      fi
+    fi
+
+    git status -sb
+
+    echo "✅ SUCCESS"
+  ) > "$log_file" 2>&1
 }
 
-run_repo > "$log_file" 2>&1
-'
+discover_repos() {
+  local excludes="node_modules|vendor|target|dist|build|.terraform|.gradle|.venv|__pycache__|.next|out|coverage"
 
-# 🔍 Collect repos
-EXCLUDES="node_modules|vendor|target|dist|build|.terraform|.gradle|.venv|__pycache__|.next|out|coverage"
-if [ "$has_fd" = true ]; then
-  repos=$(fd -H -t d ".git" -x dirname | sort -u | grep -vE "/($EXCLUDES)/")
-else
-  echo "⚠️ 'fd' not found, falling back to slower 'find'"
-  repos=$(find . -type d -name ".git" -exec dirname {} \; | sort -u | grep -vE "/($EXCLUDES)/")
-fi
-
-# 🎯 Interactive
-if [ "$INTERACTIVE" = true ]; then
-  if [ "$has_fzf" = true ]; then
-    repos=$(echo "$repos" | fzf -m --preview 'git -C {} status -sb')
+  if [ "$HAS_FD" = true ]; then
+    read_command_lines REPO_LIST bash -c 'fd -H -t d ".git" -x dirname | sort -u | grep -vE "/('"$excludes"')/"'
   else
-    echo "⚠️ 'fzf' not found, skipping interactive mode"
+    echo "⚠️ 'fd' not found, falling back to slower 'find'"
+    read_command_lines REPO_LIST bash -c 'find . -type d -name ".git" -exec dirname {} \; | sort -u | grep -vE "/('"$excludes"')/"'
   fi
-fi
+}
 
-COUNT=$(echo "$repos" | grep -c .)
-echo "📦 Selected $COUNT repositories"
-
-# 🚀 Execution
-if [ -n "$PARALLEL" ]; then
-  echo "$repos" | xargs -n1 $PARALLEL -I{} bash -c "$CMD" _ "{}/.git"
-else
-  echo "$repos" | while read -r repo; do
-    [ -z "$repo" ] && continue
-    bash -c "$CMD" _ "$repo/.git"
-  done
-fi
-
-# 📜 Output
-echo ""
-
-if [ "$VERBOSE" = true ]; then
-  echo "📜 Detailed logs"
-  echo "-----------------------------------"
-fi
-
-if [ "$has_fd" = true ]; then
-  LOG_CMD='fd -t f -e log . "$LOG_DIR" | sort'
-else
-  LOG_CMD='find "$LOG_DIR" -type f -name "*.log" | sort'
-fi
-
-eval "$LOG_CMD" | while IFS= read -r log; do
-  repo=$(basename "$log" .log | sed "s|_|/|g")
-
-  if [ "$VERBOSE" = true ]; then
-    echo ""
-    echo "=============================="
-    echo "📦 $repo"
-    echo "=============================="
-    cat "$log"
-  else
-    if grep -q "✅ SUCCESS" "$log"; then
-      echo "✅ $repo"
+select_repos() {
+  if [ "$INTERACTIVE" = true ]; then
+    if [ "$HAS_FZF" = true ]; then
+      read_command_lines REPO_LIST bash -c 'printf "%s\n" "$@" | fzf -m --preview '\''git -C {} status -sb'\''' _ "${REPO_LIST[@]}"
     else
-      echo "❌ $repo"
+      echo "⚠️ 'fzf' not found, skipping interactive mode"
     fi
   fi
-done
+}
 
-# 📊 Summary
-echo ""
-echo "📊 Summary"
-echo "-----------------------------------"
+run_repos() {
+  local count
 
-SUCCESS=$(grep -l "✅ SUCCESS" "$LOG_DIR"/*.log 2>/dev/null | wc -l | tr -d " ")
-FAILED=$(grep -L "✅ SUCCESS" "$LOG_DIR"/*.log 2>/dev/null | wc -l | tr -d " ")
+  count="${#REPO_LIST[@]}"
+  echo "📦 Selected $count repositories"
 
-echo "✅ Success: $SUCCESS"
-echo "❌ Failed : $FAILED"
-
-if [ "$FAILED" -gt 0 ]; then
-  echo ""
-  echo "⚠️ Failed repositories:"
-
-  for log in $(grep -L "✅ SUCCESS" "$LOG_DIR"/*.log 2>/dev/null); do
-    repo=$(basename "$log" .log | sed "s|_|/|g")
-    echo "❌ $repo"
-    echo "   → $log"
-  done
-
-  echo ""
-fi
-
-# 🧹 Cleanup logic
-if [ "$PERSIST_LOGS" = false ]; then
-  if [ "$FAILED" -eq 0 ]; then
-    rm -rf "$LOG_DIR"
+  if [ -n "$PARALLEL" ]; then
+    export -f process_repo
+    printf '%s\0' "${REPO_LIST[@]}" | xargs -0 -n1 "$PARALLEL" -I{} bash -c 'process_repo "$1"' _ "{}"
   else
-    # keep only failed logs
-    for log in "$LOG_DIR"/*.log; do
-      if grep -q "✅ SUCCESS" "$log"; then
-        rm -f "$log"
-      fi
+    for repo in "${REPO_LIST[@]}"; do
+      process_repo "$repo"
     done
-    echo "📂 Logs: $LOG_DIR (failures only)"
   fi
-else
-  echo "📂 Logs: $LOG_DIR"
-fi
+}
 
-echo "-----------------------------------"
-echo "🎉 Done!"
+print_logs() {
+  local -a log_files=()
+
+  echo ""
+
+  if [ "$VERBOSE" = true ]; then
+    echo "📜 Detailed logs"
+    echo "-----------------------------------"
+  fi
+
+  if [ "$HAS_FD" = true ]; then
+    read_command_lines log_files bash -c 'fd -t f -e log . "$1" | sort' _ "$LOG_DIR"
+  else
+    read_command_lines log_files bash -c 'find "$1" -type f -name "*.log" | sort' _ "$LOG_DIR"
+  fi
+
+  for log in "${log_files[@]}"; do
+    local repo
+    repo=$(basename "$log" .log | sed "s|_|/|g")
+
+    if [ "$VERBOSE" = true ]; then
+      echo ""
+      echo "=============================="
+      echo "📦 $repo"
+      echo "=============================="
+      cat "$log"
+    else
+      if grep -q "✅ SUCCESS" "$log"; then
+        echo "✅ $repo"
+      else
+        echo "❌ $repo"
+      fi
+    fi
+  done
+}
+
+print_summary() {
+  local success
+  local failed
+  local -a failed_logs=()
+  local log
+
+  echo ""
+  echo "📊 Summary"
+  echo "-----------------------------------"
+
+  success=$(grep -l "✅ SUCCESS" "$LOG_DIR"/*.log 2>/dev/null | wc -l | tr -d " ")
+  failed=$(grep -L "✅ SUCCESS" "$LOG_DIR"/*.log 2>/dev/null | wc -l | tr -d " ")
+
+  echo "✅ Success: $success"
+  echo "❌ Failed : $failed"
+
+  if [ "$failed" -gt 0 ]; then
+    read_command_lines failed_logs bash -c 'grep -L "✅ SUCCESS" "$@" 2>/dev/null' _ "$LOG_DIR"/*.log
+    echo ""
+    echo "⚠️ Failed repositories:"
+
+    for log in "${failed_logs[@]}"; do
+      local repo
+      repo=$(basename "$log" .log | sed "s|_|/|g")
+      echo "❌ $repo"
+      echo "   → $log"
+    done
+
+    echo ""
+  fi
+
+  if [ "$PERSIST_LOGS" = false ]; then
+    if [ "$failed" -eq 0 ]; then
+      rm -rf "$LOG_DIR"
+    else
+      for log in "$LOG_DIR"/*.log; do
+        if grep -q "✅ SUCCESS" "$log"; then
+          rm -f "$log"
+        fi
+      done
+      echo "📂 Logs: $LOG_DIR (failures only)"
+    fi
+  else
+    echo "📂 Logs: $LOG_DIR"
+  fi
+
+  echo "-----------------------------------"
+  echo "🎉 Done!"
+
+  if [ "$failed" -gt 0 ]; then
+    return 1
+  fi
+
+  return 0
+}
+
+main() {
+  reset_state
+  parse_args "$@"
+  detect_tools
+  init_log_dir
+  print_run_header
+  discover_repos
+  select_repos
+  run_repos
+  print_logs
+  print_summary
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi
