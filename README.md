@@ -177,7 +177,15 @@ The suite now includes an integration test that creates temporary Git repositori
 
 ## 🚢 Releases
 
-Releases are managed by `semantic-release` on `main`. Conventional commits drive the next tag, `CHANGELOG.md`, and the tracked `VERSION` file. The CLI reads its version from `git-align.version` for installed copies, then `VERSION`, then the latest Git tag.
+Releases are managed manually through the GitHub Actions `Release` workflow. Conventional commits still drive the next semantic version, but a release is only created when you trigger the workflow. `semantic-release` updates the Git tag, `CHANGELOG.md`, and the tracked `VERSION` file. The CLI reads its version from `git-align.version` for installed copies, then `VERSION`, then the latest Git tag.
+
+To cut a release:
+
+```text
+GitHub -> Actions -> Release -> Run workflow
+```
+
+Use the optional `dry_run` input to preview the next version and notes without creating a tag or release.
 
 ---
 

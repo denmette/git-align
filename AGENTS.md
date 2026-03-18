@@ -13,7 +13,7 @@ Keep scripts POSIX-leaning Bash unless a Bash-specific feature is clearly needed
 There is no automated test suite yet, so validation is currently command-based. At minimum, check syntax with `bash -n` and exercise the help/version paths plus one real run in a safe directory, for example `bash bin/git-align --version`. If you add tests, favor lightweight shell-based integration checks and name them after the behavior under test, such as `tests/help_output.sh`.
 
 ## Commit & Pull Request Guidelines
-Recent history uses conventional prefixes like `feat:` and `release:`; keep commit subjects short, imperative, and scoped to one change. Pull requests should explain the user-visible effect, note any dependency changes (`fd`, `fzf`, `git`), and include sample commands or terminal output when behavior changes. Link related issues when applicable.
+Recent history uses conventional prefixes like `feat:`, `fix:`, `test:`, and `chore:`; keep commit subjects short, imperative, and scoped to one change. Releases are manual: maintain conventional commits on `main`, then trigger the GitHub Actions `Release` workflow when you want `semantic-release` to update `CHANGELOG.md`, `VERSION`, and tags. Pull requests should explain the user-visible effect, note any dependency changes (`fd`, `fzf`, `git`), and include sample commands or terminal output when behavior changes. Link related issues when applicable.
 
 ## Security & Configuration Tips
 `git-align` performs `fetch`, `switch`, `pull --rebase`, and `rebase`, so avoid testing against critical repositories first. Use `GIT_ALIGN_LOG_DIR` when you need logs in a custom location, and document any new environment variables in `README.md`.
