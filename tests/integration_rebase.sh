@@ -57,6 +57,7 @@ test_rebases_feature_branch_on_updated_default() {
   assert_status 0 "$status"
   assert_contains "$output" "✅ Success: 1"
   assert_contains "$output" "❌ Failed : 0"
+  assert_contains "$output" "1/1 ✅ ./repo"
 
   current_branch=$(git -C "$repo" branch --show-current)
   assert_equals "feature" "$current_branch"
