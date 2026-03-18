@@ -15,7 +15,7 @@ test_installer_works_outside_repo_root() {
 
   (
     cd "$temp_cwd"
-    HOME="$temp_home" bash "$TEST_ROOT/install.sh" >/dev/null
+    PATH="/usr/bin:/bin:/usr/sbin:/sbin" HOME="$temp_home" bash "$TEST_ROOT/install.sh" >/dev/null
   )
 
   [ -x "$temp_home/.local/bin/git-align" ] || fail "expected installed executable in fallback bin directory"
