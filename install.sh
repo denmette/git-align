@@ -2,9 +2,12 @@
 
 set -e
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+PROJECT_ROOT="$SCRIPT_DIR"
+
 echo "📦 Installing git-align..."
 
-chmod +x bin/git-align
+chmod +x "$PROJECT_ROOT/bin/git-align"
 
 # Detect brew prefix
 if command -v brew >/dev/null; then
@@ -19,8 +22,8 @@ USER_BIN="$HOME/.local/bin"
 install_to() {
   DEST="$1"
   mkdir -p "$DEST"
-  cp bin/git-align "$DEST/git-align"
-  cp VERSION "$DEST/git-align.version"
+  cp "$PROJECT_ROOT/bin/git-align" "$DEST/git-align"
+  cp "$PROJECT_ROOT/VERSION" "$DEST/git-align.version"
   echo "✅ Installed to $DEST"
 }
 

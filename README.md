@@ -38,22 +38,25 @@ It fetches, rebases, and keeps your branches in sync with the default branch (`o
 
 ## 📦 Installation
 
-### Option 1: Manual
+### Option 1: Installer
 
 ```bash
-chmod +x git-align
-mv git-align ~/.local/bin
+bash install.sh
 ```
 
-Make sure `~/.local/bin` is in your `$PATH`.
+This installs `git-align` and its companion `git-align.version` file into Homebrew's bin when writable, or `~/.local/bin` otherwise.
 
 ---
 
-### Option 2: Homebrew-style (custom)
+### Option 2: Manual
 
 ```bash
-cp git-align $(brew --prefix)/bin
+cp bin/git-align ~/.local/bin/git-align
+cp VERSION ~/.local/bin/git-align.version
+chmod +x ~/.local/bin/git-align
 ```
+
+Make sure `~/.local/bin` is in your `$PATH`.
 
 ---
 
