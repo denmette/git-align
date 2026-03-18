@@ -29,6 +29,24 @@ test_parallel_requires_value() {
   assert_contains "$output" "Option -p requires a value"
 }
 
+test_parallel_rejects_zero() {
+  run_cli --parallel 0
+  assert_status 1 "$status"
+  assert_contains "$output" "Option --parallel requires a positive integer"
+}
+
+test_parallel_rejects_negative_number() {
+  run_cli --parallel=-1
+  assert_status 1 "$status"
+  assert_contains "$output" "Option --parallel requires a positive integer"
+}
+
+test_parallel_rejects_non_numeric_value() {
+  run_cli --parallel foo
+  assert_status 1 "$status"
+  assert_contains "$output" "Option --parallel requires a positive integer"
+}
+
 test_since_requires_value() {
   run_cli --since
   assert_status 1 "$status"
@@ -40,6 +58,9 @@ main() {
   test_version_short_flag
   test_version_long_flag
   test_parallel_requires_value
+  test_parallel_rejects_zero
+  test_parallel_rejects_negative_number
+  test_parallel_rejects_non_numeric_value
   test_since_requires_value
   echo "PASS: cli_args"
 }

@@ -129,17 +129,28 @@ require_arg() {
   fi
 }
 
+require_positive_integer() {
+  local option="$1"
+  local value="$2"
+
+  if [[ ! "$value" =~ ^[0-9]+$ ]] || [ "$value" -le 0 ]; then
+    die "Option $option requires a positive integer"
+  fi
+}
+
 parse_args() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --parallel=*)
         PARALLEL_COUNT="${1#--parallel=}"
+        require_positive_integer "--parallel" "$PARALLEL_COUNT"
         PARALLEL="-P$PARALLEL_COUNT"
         shift
         ;;
       -p|--parallel)
         require_arg "$1" "${2-}"
         PARALLEL_COUNT="$2"
+        require_positive_integer "$1" "$PARALLEL_COUNT"
         PARALLEL="-P$PARALLEL_COUNT"
         shift 2
         ;;
