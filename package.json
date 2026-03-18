@@ -1,0 +1,8 @@
+{
+  "name": "git-align-release",
+  "private": true,
+  "description": "Release automation for git-align",
+  "scripts": {
+    "release": "semantic-release"
+  }
+}

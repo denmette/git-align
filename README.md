@@ -172,6 +172,12 @@ The suite now includes an integration test that creates temporary Git repositori
 
 ---
 
+## 🚢 Releases
+
+Releases are managed by `semantic-release` on `main`. Conventional commits drive the next tag, `CHANGELOG.md`, and the tracked `VERSION` file. The CLI reads its version from `git-align.version` for installed copies, then `VERSION`, then the latest Git tag.
+
+---
+
 ## ⚠️ Requirements
 
 * `git`

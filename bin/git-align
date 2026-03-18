@@ -2,7 +2,6 @@
 
 set -u
 
-VERSION="0.2.0"
 SCRIPT_PATH="${BASH_SOURCE[0]}"
 
 PARALLEL=""
@@ -48,6 +47,37 @@ OPTIONS:
   -V, --version          Show version
   -h, --help             Show this help message
 EOF
+}
+
+get_script_dir() {
+  cd "$(dirname "$SCRIPT_PATH")" && pwd
+}
+
+get_repo_root() {
+  cd "$(dirname "$SCRIPT_PATH")/.." && pwd
+}
+
+print_version() {
+  local script_dir
+  local repo_root
+  local version
+
+  script_dir=$(get_script_dir)
+  repo_root=$(get_repo_root)
+
+  if [ -f "$script_dir/git-align.version" ]; then
+    version=$(head -n 1 "$script_dir/git-align.version")
+  elif [ -f "$repo_root/VERSION" ]; then
+    version=$(head -n 1 "$repo_root/VERSION")
+  elif git -C "$repo_root" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    version=$(git -C "$repo_root" describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')
+  fi
+
+  if [ -z "${version:-}" ]; then
+    version="dev"
+  fi
+
+  echo "git-align $version"
 }
 
 read_command_lines() {
@@ -130,7 +160,7 @@ parse_args() {
         exit 0
         ;;
       -V|--version)
-        echo "git-align $VERSION"
+        print_version
         exit 0
         ;;
       *)

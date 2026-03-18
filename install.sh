@@ -20,6 +20,7 @@ install_to() {
   DEST="$1"
   mkdir -p "$DEST"
   cp bin/git-align "$DEST/git-align"
+  cp VERSION "$DEST/git-align.version"
   echo "✅ Installed to $DEST"
 }
 
