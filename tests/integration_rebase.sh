@@ -175,7 +175,7 @@ EOF
   fi
 
   assert_equals "main" "$(git -C "$repo" branch --show-current)"
-  assert_equals "main" "$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@')"
+  assert_equals "main" "$(git -C "$repo" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@')"
 }
 
 main() {
