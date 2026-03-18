@@ -10,6 +10,7 @@ SINCE=""
 INTERACTIVE=false
 VERBOSE=false
 PERSIST_LOGS=false
+DRY_RUN=false
 LOG_BASE=""
 LOG_DIR=""
 REPOS=""
@@ -18,22 +19,24 @@ HAS_FZF=false
 REPO_LIST=()
 
 show_help() {
+  local version
+  version=$(print_version | awk '{print $2}')
+
+  cat << 'EOF'
+
+        _ _              _ _             
+   __ _(_) |_       __ _| (_) __ _ _ __  
+  / _` | | __|____ / _` | | |/ _` | '_ \ 
+ | (_| | | ||_____| (_| | | | (_| | | | |
+  \__, |_|\__|     \__,_|_|_|\__, |_| |_|
+  |___/                      |___/       
+
+EOF
+
   cat << EOF
+git-align v$version
 
-             __    __                      __  __
-            /  |  /  |                    /  |/  |
-    ______  $$/  _$$ |_           ______  $$ |$$/   ______   _______
-   /      \ /  |/ $$   |  ______ /      \ $$ |/  | /      \ /       \
-  /$$$$$$  |$$ |$$$$$$/  /      |$$$$$$  |$$ |$$ |/$$$$$$  |$$$$$$$  |
-  $$ |  $$ |$$ |  $$ | __$$$$$$/ /    $$ |$$ |$$ |$$ |  $$ |$$ |  $$ |
-  $$ \__$$ |$$ |  $$ |/  |      /$$$$$$$ |$$ |$$ |$$ \__$$ |$$ |  $$ |
-  $$    $$ |$$ |  $$  $$/       $$    $$ |$$ |$$ |$$    $$ |$$ |  $$ |
-   $$$$$$$ |$$/    $$$$/         $$$$$$$/ $$/ $$/  $$$$$$$ |$$/   $$/
-  /  \__$$ |                                      /  \__$$ |
-  $$    $$/                                       $$    $$/
-   $$$$$$/                                         $$$$$$/
-
-git-align - Keep multiple git repositories aligned
+» Keep multiple git repositories aligned
 
 USAGE:
   git-align [options]
@@ -44,6 +47,7 @@ OPTIONS:
   -i, --interactive      Select repositories interactively (fzf)
   -v, --verbose          Show live output during execution
       --logs             Persist logs (otherwise only failures are kept)
+      --dry-run          Show planned actions without changing repositories
   -V, --version          Show version
   -h, --help             Show this help message
 EOF
@@ -103,6 +107,7 @@ reset_state() {
   INTERACTIVE=false
   VERBOSE=false
   PERSIST_LOGS=false
+  DRY_RUN=false
   LOG_BASE="${GIT_ALIGN_LOG_DIR:-$HOME/.git-align/logs}"
   LOG_DIR=""
   REPOS=""
@@ -155,6 +160,10 @@ parse_args() {
         PERSIST_LOGS=true
         shift
         ;;
+      --dry-run)
+        DRY_RUN=true
+        shift
+        ;;
       -h|--help)
         show_help
         exit 0
@@ -187,7 +196,7 @@ init_log_dir() {
     LOG_DIR=$(mktemp -d -t git-align-logs-XXXX)
   fi
 
-  export LOG_DIR SINCE
+  export LOG_DIR SINCE DRY_RUN
 }
 
 print_run_header() {
@@ -195,6 +204,7 @@ print_run_header() {
   [ -n "$PARALLEL_COUNT" ] && echo "⚡ Parallel: $PARALLEL_COUNT"
   [ -n "$SINCE" ] && echo "⏱️ Since: $SINCE"
   [ "$INTERACTIVE" = true ] && echo "🎯 Interactive mode"
+  [ "$DRY_RUN" = true ] && echo "🧪 Dry run mode"
   echo "📂 Logs: $LOG_DIR"
   echo ""
 }
@@ -220,7 +230,11 @@ process_repo() {
 
     echo "📦 $repo_path"
 
-    git fetch --all --prune
+    if [ "$DRY_RUN" = true ]; then
+      echo "📝 Would fetch --all --prune"
+    else
+      git fetch --all --prune
+    fi
 
     current=$(git branch --show-current)
     default_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed "s@^refs/remotes/origin/@@")
@@ -253,9 +267,30 @@ process_repo() {
     fi
 
     if ! git diff --quiet || ! git diff --cached --quiet || [ "$has_untracked" = true ]; then
-      echo "👉 Stashing changes"
-      git stash push -u -m auto-update
-      stashed=true
+      if [ "$DRY_RUN" = true ]; then
+        echo "📝 Would stash local changes"
+      else
+        echo "👉 Stashing changes"
+        git stash push -u -m auto-update
+        stashed=true
+      fi
+    fi
+
+    if [ "$DRY_RUN" = true ]; then
+      echo "📝 Would switch to $default_branch"
+      echo "📝 Would pull --rebase origin $default_branch"
+
+      if [ "$current" != "$default_branch" ]; then
+        echo "📝 Would switch back to $current"
+        echo "📝 Would rebase $current onto origin/$default_branch"
+      fi
+
+      if ! git diff --quiet || ! git diff --cached --quiet || [ "$has_untracked" = true ]; then
+        echo "📝 Would restore stashed changes"
+      fi
+
+      echo "✅ SUCCESS"
+      exit 0
     fi
 
     git switch "$default_branch"

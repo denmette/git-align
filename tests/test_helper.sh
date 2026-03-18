@@ -116,3 +116,13 @@ assert_git_stash_contains() {
     fail "expected git stash list in $repo to contain '$needle', got: $stash_output"
   fi
 }
+
+assert_git_stash_empty() {
+  local repo="$1"
+  local stash_output
+
+  stash_output=$(git -C "$repo" stash list)
+  if [ -n "$stash_output" ]; then
+    fail "expected empty git stash list in $repo, got: $stash_output"
+  fi
+}

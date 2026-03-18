@@ -30,6 +30,7 @@ It fetches, rebases, and keeps your branches in sync with the default branch (`o
 - 🎯 Interactive selection with `fzf`
 - ⏱️ Filter repositories by recent remote changes (`--since`)
 - 🔀 Rebase current branch on default branch
+- 🧪 Preview changes with `--dry-run`
 - 🧹 Auto-stash and restore local changes
 - 📜 Optional detailed logs
 - 🧠 Smart log cleanup (only failures kept by default)
@@ -77,6 +78,7 @@ git-align [options]
 | `-i, --interactive`  | Select repositories using `fzf`                 |
 | `-v, --verbose`      | Show detailed logs after execution              |
 | `--logs`             | Persist logs (otherwise only failures are kept) |
+| `--dry-run`          | Show planned actions without changing repos     |
 | `-V, --version`      | Show version                                    |
 | `-h, --help`         | Show help                                       |
 
@@ -128,6 +130,14 @@ git-align -p 4 -s "1 week ago" -i
 
 ```bash
 git-align -v --logs
+```
+
+---
+
+### Dry run
+
+```bash
+git-align --dry-run
 ```
 
 ---
@@ -233,7 +243,6 @@ Feel free to fork, tweak, and improve.
 
 Ideas for future improvements:
 
-* `--dry-run`
 * progress indicator
 * colored output
 * JSON output mode
