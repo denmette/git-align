@@ -12,7 +12,7 @@ create_space_fixture() {
   local updater="$TEST_TMP/${name}-updater"
   local repo="$workspace/team repo"
 
-  git init --bare "$remote" >/dev/null
+  git init --bare --initial-branch=main "$remote" >/dev/null
   git clone "$remote" "$seed" >/dev/null 2>&1
   git_test_init "$seed"
 

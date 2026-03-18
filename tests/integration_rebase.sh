@@ -10,7 +10,7 @@ create_remote_fixture() {
   local workspace="$TEST_TMP/workspace"
   local updater="$TEST_TMP/updater"
 
-  git init --bare "$remote" >/dev/null
+  git init --bare --initial-branch=main "$remote" >/dev/null
   git clone "$remote" "$seed" >/dev/null 2>&1
   git_test_init "$seed"
 
