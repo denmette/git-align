@@ -244,6 +244,10 @@ process_repo() {
 
     local current
     local default_branch
+    local default_ref
+    local remote_target
+    local remote_oid=""
+    local remote_commit_available=true
     local changes
     local stashed=false
     local has_untracked=false
@@ -266,14 +270,31 @@ process_repo() {
 
     echo "👉 Current: $current | Default: $default_branch"
 
-    if git diff --quiet HEAD "origin/$default_branch"; then
+    default_ref="origin/$default_branch"
+    remote_target="$default_ref"
+
+    if [ "$DRY_RUN" = true ]; then
+      remote_oid=$(git ls-remote --exit-code --refs origin "refs/heads/$default_branch" 2>/dev/null | awk 'NR == 1 { print $1 }')
+
+      if [ -n "$remote_oid" ] && git cat-file -e "$remote_oid^{commit}" 2>/dev/null; then
+        remote_target="$remote_oid"
+      elif [ -n "$remote_oid" ]; then
+        remote_commit_available=false
+      fi
+    fi
+
+    if [ "$remote_commit_available" = true ] && git merge-base --is-ancestor "$remote_target" HEAD; then
       echo "⏭️ Already up-to-date"
       echo "✅ SUCCESS"
       exit 0
     fi
 
     if [ -n "$SINCE" ]; then
-      changes=$(git log HEAD.."origin/$default_branch" --since="$SINCE" --oneline)
+      if [ "$remote_commit_available" = false ]; then
+        changes="unknown"
+      else
+        changes=$(git log HEAD.."$remote_target" --since="$SINCE" --oneline)
+      fi
 
       if [ -z "$changes" ]; then
         echo "⏭️ No recent changes"
