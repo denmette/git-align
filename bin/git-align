@@ -475,6 +475,7 @@ run_repos() {
 
 print_logs() {
   local -a log_files=()
+  local log
 
   if [ "$VERBOSE" = true ]; then
     echo ""
@@ -488,7 +489,8 @@ print_logs() {
     read_command_lines log_files bash -c 'find "$1" -type f -name "*.log" | sort' _ "$LOG_DIR"
   fi
 
-  for log in "${log_files[@]}"; do
+  for log in "${log_files[@]-}"; do
+    [ -n "$log" ] || continue
     local repo
     repo=$(cat "$STATUS_DIR/$(basename "$log" .log).repo")
 
@@ -507,13 +509,26 @@ print_summary() {
   local failed
   local -a failed_logs=()
   local log
+  local has_logs=false
 
   echo ""
   echo "📊 Summary"
   echo "-----------------------------------"
 
-  success=$(grep -l "✅ SUCCESS" "$LOG_DIR"/*.log 2>/dev/null | wc -l | tr -d " ")
-  failed=$(grep -L "✅ SUCCESS" "$LOG_DIR"/*.log 2>/dev/null | wc -l | tr -d " ")
+  for log in "$LOG_DIR"/*.log; do
+    if [ -f "$log" ]; then
+      has_logs=true
+      break
+    fi
+  done
+
+  if [ "$has_logs" = true ]; then
+    success=$(grep -l "✅ SUCCESS" "$LOG_DIR"/*.log 2>/dev/null | wc -l | tr -d " ")
+    failed=$(grep -L "✅ SUCCESS" "$LOG_DIR"/*.log 2>/dev/null | wc -l | tr -d " ")
+  else
+    success=0
+    failed=0
+  fi
 
   echo "✅ Success: $success"
   echo "❌ Failed : $failed"
